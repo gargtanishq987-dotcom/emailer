@@ -1,0 +1,189 @@
+// This is your Prisma schema file for the Cold Email Platform
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          String   @default("admin")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  sessions      Session[] @relation("UserSessions")
+  inboxes       Inbox[] @relation("UserInboxes")
+  campaigns     Campaign[] @relation("UserCampaigns")
+  leads         Lead[] @relation("UserLeads")
+  activityLogs  ActivityLog[] @relation("UserActivityLogs")
+  analytics     Analytics[] @relation("UserAnalytics")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserSessions", fields: [userId], references: [id], onDelete: Cascade)
+  token     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+  @@index([token])
+}
+
+model Inbox {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation("UserInboxes", fields: [userId], references: [id], onDelete: Cascade)
+  email               String
+  accessToken         String   // Encrypted
+  refreshToken        String   // Encrypted
+  tokenExpiry         DateTime
+  isConnected         Boolean  @default(false)
+  isPaused            Boolean  @default(false)
+  dailySendLimit      Int      @default(100)
+  sentToday           Int      @default(0)
+  timezone            String   @default("UTC")
+  sendingWindowStart  Int      @default(9)   // 9 AM
+  sendingWindowEnd    Int      @default(17)  // 5 PM
+  healthMetrics       Json?    // Store metrics like sent, failed, queued, replies, bounce estimates
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  campaigns           Campaign[] @relation("InboxCampaigns")
+  leads             Lead[]   @relation("LeadInbox")
+  messages            Message[] @relation("InboxMessages")
+  analytics         Analytics[] @relation("AnalyticsInbox")
+  @@index([userId])
+  @@index([email])
+}
+
+model Campaign {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation("UserCampaigns", fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  status          String   @default("draft") // draft, active, paused, stopped, archived
+  timezone        String   @default("UTC")
+  sendingSchedule Json     // Schedule configuration
+  activeDays      Int[]    // [1,2,3,4,5] for Mon-Fri
+  dailySendLimit  Int      @default(100)
+  followUpDelays  Int[]    // [3, 7, 14] days
+  randomDelayMin  Int      @default(60)    // seconds
+  randomDelayMax  Int      @default(300)   // seconds
+  inboxPool       String[] // Array of inbox IDs
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  leads           Lead[] @relation("CampaignLeads")
+  messages        Message[] @relation("CampaignMessages")
+  analytics       Analytics[] @relation("AnalyticsCampaign")
+  inboxes         Inbox[]  @relation("InboxCampaigns")
+  @@index([userId])
+  @@index([status])
+}
+
+model Lead {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation("UserLeads", fields: [userId], references: [id], onDelete: Cascade)
+  campaignId      String?
+  campaign        Campaign? @relation("CampaignLeads", fields: [campaignId], references: [id])
+  inboxId         String?
+  inbox           Inbox?    @relation("LeadInbox", fields: [inboxId], references: [id])
+  firstName       String?
+  lastName        String?
+  company         String?
+  email           String
+  subject         String
+  body            String
+  followUp1       String?
+  followUp2       String?
+  followUp3       String?
+  customVariables Json?    // Store custom variables as JSON
+  status          String   @default("pending") // pending, sent, replied, positive, booked, closed, bounced, unsubscribed
+  assignedInbox   String   // Currently assigned inbox for rotation
+  positiveReply   Boolean  @default(false)
+  meetingBooked   Boolean  @default(false)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  messages        Message[] @relation("LeadMessages")
+  replies         Reply[]  @relation("ReplyLead")
+  @@index([userId])
+  @@index([campaignId])
+  @@index([inboxId])
+  @@index([email])
+  @@index([status])
+}
+
+model Message {
+  id              String   @id @default(uuid())
+  leadId          String
+  lead            Lead     @relation("LeadMessages", fields: [leadId], references: [id])
+  inboxId         String
+  inbox           Inbox    @relation("InboxMessages", fields: [inboxId], references: [id])
+  campaignId      String?
+  campaign        Campaign? @relation("CampaignMessages", fields: [campaignId], references: [id])
+  subject         String
+  body            String
+  isFollowUp      Boolean  @default(false)
+  followUpSequence Int?     // 1, 2, 3 for follow-ups
+  gmailThreadId   String?  // Gmail thread ID for threading
+  gmailMessageId  String?  // Gmail message ID
+  status          String   @default("queued") // queued, sending, sent, failed, bounced
+  sentAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  @@index([leadId])
+  @@index([inboxId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([gmailThreadId])
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserActivityLogs", fields: [userId], references: [id])
+  action    String   // e.g., "connected_inbox", "started_campaign", "imported_leads"
+  details   Json?    // Additional details about the action
+  timestamp DateTime @default(now())
+  @@index([userId])
+  @@index([timestamp])
+}
+
+model Analytics {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("UserAnalytics", fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  metricType String   // sent, delivered, replies, positive_replies, etc.
+  metricValue Int
+  campaignId String?
+  campaign  Campaign? @relation("AnalyticsCampaign", fields: [campaignId], references: [id])
+  inboxId   String?
+  inbox     Inbox?    @relation("AnalyticsInbox", fields: [inboxId], references: [id])
+  @@index([userId])
+  @@index([date])
+  @@index([metricType])
+  @@index([campaignId])
+  @@index([inboxId])
+}
+
+// Manual Reply Tracking (if auto-parsing not implemented)
+model Reply {
+  id        String   @id @default(uuid())
+  leadId    String
+  lead      Lead     @relation("ReplyLead", fields: [leadId], references: [id], onDelete: Cascade)
+  content   String
+  isPositive Boolean @default(false)
+  isMeetingBooked Boolean @default(false)
+  isNotInterested Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([leadId])
+}
