@@ -286,9 +286,14 @@ export default function CampaignsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [filter, setFilter] = useState<string>("all");
 
-  const { data: campaigns, isLoading } = useQuery<Campaign[]>({
+  const { data: campaigns, isLoading, error } = useQuery<Campaign[]>({
     queryKey: ["campaigns"],
-    queryFn: () => fetch("/api/campaigns").then((r) => r.json()).then((d) => d.data ?? []),
+    queryFn: async () => {
+      const r = await fetch("/api/campaigns");
+      const d = await r.json();
+      if (!d.success) throw new Error(d.error ?? "Failed to load campaigns");
+      return d.data ?? [];
+    },
   });
 
   const { data: inboxes } = useQuery<Inbox[]>({
@@ -351,13 +356,18 @@ export default function CampaignsPage() {
         ))}
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-4 text-sm text-red-700 dark:text-red-400">
+          Error: {(error as Error).message}
+        </div>
+      ) : isLoading ? (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-48 bg-gray-100 dark:bg-gray-800 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : !filtered.length ? (
+
         <div className="text-center py-16">
           <Send className="h-10 w-10 mx-auto text-gray-300 dark:text-gray-700 mb-3" />
           <p className="text-gray-500 dark:text-gray-400">
