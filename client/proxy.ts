@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/gmail/callback", "/api/worker"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/gmail/callback", "/api/worker", "/api/cron"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

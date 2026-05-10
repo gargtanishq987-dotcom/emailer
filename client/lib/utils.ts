@@ -6,19 +6,34 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(ts: number | null | undefined): string {
-  if (!ts) return "—";
-  return format(new Date(ts), "MMM d, yyyy");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toMs(ts: any): number | null {
+  if (!ts) return null;
+  if (typeof ts === "number") return ts;
+  // Firestore Timestamp serialized to JSON
+  if (typeof ts === "object") {
+    const secs = ts._seconds ?? ts.seconds;
+    if (typeof secs === "number") return secs * 1000;
+  }
+  return null;
 }
 
-export function formatDateTime(ts: number | null | undefined): string {
-  if (!ts) return "—";
-  return format(new Date(ts), "MMM d, yyyy h:mm a");
+export function formatDate(ts: unknown): string {
+  const ms = toMs(ts);
+  if (!ms) return "—";
+  return format(new Date(ms), "MMM d, yyyy");
 }
 
-export function formatRelative(ts: number | null | undefined): string {
-  if (!ts) return "—";
-  return formatDistanceToNow(new Date(ts), { addSuffix: true });
+export function formatDateTime(ts: unknown): string {
+  const ms = toMs(ts);
+  if (!ms) return "—";
+  return format(new Date(ms), "MMM d, yyyy h:mm a");
+}
+
+export function formatRelative(ts: unknown): string {
+  const ms = toMs(ts);
+  if (!ms) return "—";
+  return formatDistanceToNow(new Date(ms), { addSuffix: true });
 }
 
 export function formatPercent(value: number, total: number): string {
